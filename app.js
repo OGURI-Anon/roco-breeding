@@ -28,6 +28,7 @@ const state = {
   view: "parents",
   creatures: [],
   byKey: new Map(),
+  atlasByName: new Map(),
   eggImages: new Map(),
   eggImagesByBase: new Map(),
   accounts: [],
@@ -36,6 +37,7 @@ const state = {
   filters: {
     nestSearch: "", nestStatus: "",
     parentSearch: "", parentGroup: "", parentNature: "", parentHonor: "", coverageHonor: COVERAGE_HONORS[0],
+    motherDexHonor: COVERAGE_HONORS[0],
     eggSearch: "", eggGroup: "", eggSize: ""
   },
   editor: null
@@ -55,6 +57,7 @@ async function init() {
     ]);
     state.creatures = buildCreatures(csvText, atlas);
     state.byKey = new Map(state.creatures.map((item) => [item.key, item]));
+    state.atlasByName = buildAtlasNameMap(atlas.l || []);
     buildEggImageMaps(eggImageData.items || []);
     initializeAccounts();
     state.db = loadDb();
@@ -92,6 +95,16 @@ function buildEggImageMaps(items) {
     const baseKey = eggImageBaseName(key);
     if (!state.eggImagesByBase.has(baseKey)) state.eggImagesByBase.set(baseKey, item.image);
   });
+}
+
+function buildAtlasNameMap(items) {
+  const map = new Map();
+  items.forEach((pet) => {
+    [pet.fn, pet.nm].map(clean).filter(Boolean).forEach((name) => {
+      if (!map.has(name)) map.set(name, pet);
+    });
+  });
+  return map;
 }
 
 function normalizeEggImageName(value) {
@@ -424,6 +437,7 @@ function renderAll() {
   renderAccounts();
   renderSaveTime();
   renderParents();
+  renderMotherDex();
   renderCoverage();
   renderEggs();
 }
@@ -796,6 +810,76 @@ function renderPairSuggestions() {
   }).join("") : emptyState("暂无可配组合", "至少登记一只拥有共同蛋组的种公和种母");
 }
 
+function renderMotherDex() {
+  const honor = COVERAGE_HONORS.includes(state.filters.motherDexHonor)
+    ? state.filters.motherDexHonor
+    : COVERAGE_HONORS[0];
+  $$('[data-action="motherdex-honor"]').forEach((button) => {
+    const active = button.dataset.honor === honor;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  const ownedSpecies = new Set(allLocalParents()
+    .filter((parent) => parent.sex === "female" && parent.size === honor)
+    .map((parent) => creatureOf(parent)?.eggSpecies)
+    .filter(Boolean));
+  const entries = motherDexEntries();
+  const ownedCount = entries.filter((entry) => ownedSpecies.has(entry.name)).length;
+  $("#motherDexCount").textContent = `已有 ${ownedCount} / ${entries.length}`;
+  $("#motherDexGrid").innerHTML = entries.map((entry) => {
+    const owned = ownedSpecies.has(entry.name);
+    return `<article class="motherdex-card ${owned ? "owned" : "missing"}" title="${esc(entry.name)} · ${owned ? "已有" : "缺少"}">
+      <div class="motherdex-image">
+        <span class="avatar-fallback">${esc(entry.name.slice(0, 1))}</span>
+        ${entry.imageUrl ? `<img src="${esc(entry.imageUrl)}" data-fallback-src="${esc(entry.fallbackImageUrl)}" alt="${esc(entry.name)}" loading="lazy" decoding="async">` : ""}
+        <span class="motherdex-state">${owned ? "已有" : "缺少"}</span>
+      </div>
+      <strong>${esc(entry.name)}</strong>
+    </article>`;
+  }).join("");
+  $$(".motherdex-image img").forEach((image) => {
+    image.addEventListener("error", () => {
+      const fallback = image.dataset.fallbackSrc;
+      if (fallback && image.src !== fallback) {
+        image.removeAttribute("data-fallback-src");
+        image.src = fallback;
+      } else image.hidden = true;
+    });
+  });
+}
+
+function allLocalParents() {
+  return state.accounts.flatMap((account) => {
+    if (account.id === state.currentAccountId) return state.db.parents;
+    try {
+      return sanitizeDb(JSON.parse(localStorage.getItem(accountDbKey(account.id)) || "{}")).parents;
+    } catch {
+      return [];
+    }
+  });
+}
+
+function motherDexEntries() {
+  const speciesNames = [...new Set(state.creatures.map((creature) => clean(creature.eggSpecies)).filter(Boolean))];
+  return speciesNames.map((name) => {
+    const exact = state.creatures.find((creature) => creature.name === name);
+    const fallback = state.creatures.find((creature) => creature.eggSpecies === name);
+    const atlas = state.atlasByName.get(name);
+    const imageCreature = exact || {
+      name,
+      no: clean(atlas?.n) || fallback?.no || "",
+      atlas: atlas || fallback?.atlas || {}
+    };
+    return {
+      name,
+      no: exact?.no || clean(atlas?.n) || fallback?.no || "",
+      imageUrl: creatureImageUrl(imageCreature),
+      fallbackImageUrl: fallback ? creatureImageUrl(fallback) : ""
+    };
+  }).sort((a, b) => a.no.localeCompare(b.no, "zh-CN", { numeric: true }) || a.name.localeCompare(b.name, "zh-CN"));
+}
+
 function renderCoverageLegacy() {
   $("#coverageBody").innerHTML = allGroups().map((group) => {
     const males = parentBySex("male").filter((parent) => creatureOf(parent)?.groups.includes(group));
@@ -953,6 +1037,10 @@ function handleAction(event) {
   if (action === "coverage-honor") {
     state.filters.coverageHonor = button.dataset.honor;
     renderCoverage();
+  }
+  if (action === "motherdex-honor") {
+    state.filters.motherDexHonor = button.dataset.honor;
+    renderMotherDex();
   }
 }
 

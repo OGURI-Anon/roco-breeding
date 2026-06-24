@@ -508,6 +508,26 @@ input::placeholder, textarea::placeholder { color: #8a979c; }
 .coverage-legend i.female-only { background: rgba(239, 107, 114, .15); }
 .coverage-legend i.no-stock { background: rgba(255, 255, 255, .012); }
 
+.motherdex-toolbar { min-height: 62px; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); }
+.motherdex-legend { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.motherdex-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.motherdex-legend i { width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.motherdex-legend i.owned { border-color: rgba(20, 126, 112, .4); background: var(--teal-soft); }
+.motherdex-legend i.missing { filter: grayscale(1); opacity: .45; }
+.motherdex-grid { padding: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.motherdex-card { min-width: 0; min-height: 158px; padding: 10px 8px; display: grid; justify-items: center; align-content: start; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); text-align: center; }
+.motherdex-card.owned { border-color: rgba(20, 126, 112, .34); background: #fbfffe; }
+.motherdex-card.missing { background: var(--surface-2); }
+.motherdex-image { position: relative; width: 92px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 7px; background: #edf3f4; overflow: hidden; }
+.motherdex-image img { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); object-fit: contain; }
+.motherdex-card.missing .motherdex-image img { filter: grayscale(1); opacity: .24; }
+.motherdex-card.missing .avatar-fallback { filter: grayscale(1); opacity: .35; }
+.motherdex-card .avatar-fallback { color: var(--teal); font-size: 22px; font-weight: 900; }
+.motherdex-card strong { width: 100%; color: var(--text); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.motherdex-card.missing strong { color: #8a969b; }
+.motherdex-state { position: absolute; z-index: 2; right: 4px; top: 4px; padding: 2px 5px; border-radius: 4px; color: var(--teal); background: rgba(255, 255, 255, .9); font-size: 8px; font-weight: 900; }
+.motherdex-card.missing .motherdex-state { color: #7f8b90; }
+
 .egg-card { padding: 14px; }
 .egg-card-body { grid-template-columns: 112px minmax(0, 1fr); }
 .egg-card-name { max-width: 108px; color: var(--text); font-size: 12px; line-height: 1.35; text-align: center; overflow-wrap: anywhere; }
@@ -634,6 +654,12 @@ input::placeholder, textarea::placeholder { color: #8a979c; }
   .surface-head .primary-button { min-width: 40px; padding: 0 10px; }
   .coverage-honor-switch { width: 100%; overflow-x: auto; }
   .coverage-honor-switch button { flex: 0 0 auto; }
+  .motherdex-toolbar { align-items: flex-start; flex-direction: column; padding: 12px; }
+  .motherdex-honor-switch { width: 100%; display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+  .motherdex-honor-switch button { width: 100%; white-space: normal; line-height: 1.25; }
+  .motherdex-grid { grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); padding: 12px; gap: 8px; }
+  .motherdex-card { min-height: 145px; }
+  .motherdex-image { width: 80px; }
   .filter-row { display: grid; grid-template-columns: 1fr; padding: 12px; }
   .filter-row select { width: 100%; }
   .nest-grid, .egg-grid, .demand-grid { grid-template-columns: 1fr; padding: 12px; }
