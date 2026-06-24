@@ -147,6 +147,14 @@
             </div>
             <div class="motherdex-legend"><span><i class="owned"></i>已有</span><span><i class="missing"></i>缺少</span></div>
           </div>
+          <div class="motherdex-filter-row">
+            <select id="motherDexGroupFilter" aria-label="筛选母本蛋组"></select>
+            <div class="motherdex-status-switch" role="group" aria-label="筛选拥有状态">
+              <button class="active" type="button" data-action="motherdex-status" data-status="all">全部母本</button>
+              <button type="button" data-action="motherdex-status" data-status="owned">仅已有</button>
+              <button type="button" data-action="motherdex-status" data-status="missing">仅缺少</button>
+            </div>
+          </div>
           <div class="motherdex-grid" id="motherDexGrid"></div>
         </section>
       </section>

@@ -37,7 +37,7 @@ const state = {
   filters: {
     nestSearch: "", nestStatus: "",
     parentSearch: "", parentGroup: "", parentNature: "", parentHonor: "", coverageHonor: COVERAGE_HONORS[0],
-    motherDexHonor: COVERAGE_HONORS[0],
+    motherDexHonor: COVERAGE_HONORS[0], motherDexGroup: "", motherDexStatus: "all",
     eggSearch: "", eggGroup: "", eggSize: ""
   },
   editor: null
@@ -73,7 +73,7 @@ async function init() {
 async function fetchFirst(paths) {
   for (const path of paths) {
     try {
-      const response = await fetch(path);
+      const response = await fetch(path, { cache: "no-store" });
       if (response.ok) return response.text();
     } catch {}
   }
@@ -337,6 +337,7 @@ function bindEvents() {
   bindSelect("#parentGroupFilter", "parentGroup", renderParents);
   bindSelect("#parentNatureFilter", "parentNature", renderParents);
   bindSelect("#parentHonorFilter", "parentHonor", renderParents);
+  bindSelect("#motherDexGroupFilter", "motherDexGroup", renderMotherDex);
   bindSelect("#eggGroupFilter", "eggGroup", renderEggs);
   bindSelect("#eggSizeFilter", "eggSize", renderEggs);
 }
@@ -356,6 +357,7 @@ function fillStaticOptions() {
   const natures = NATURES.map((item) => item.name);
   $("#parentNatureFilter").innerHTML = optionList([""], ["全部性格"], natures, natures);
   $("#parentHonorFilter").innerHTML = optionList([""], ["全部荣誉"], HONORS, HONORS);
+  $("#motherDexGroupFilter").innerHTML = optionList([""], ["全部蛋组"], groups, groups);
   $("#eggGroupFilter").innerHTML = optionList([""], ["全部蛋组"], groups, groups);
   $("#eggSizeFilter").innerHTML = optionList([""], ["全部荣誉"], HONORS, HONORS);
 }
@@ -814,8 +816,16 @@ function renderMotherDex() {
   const honor = COVERAGE_HONORS.includes(state.filters.motherDexHonor)
     ? state.filters.motherDexHonor
     : COVERAGE_HONORS[0];
+  const status = ["all", "owned", "missing"].includes(state.filters.motherDexStatus)
+    ? state.filters.motherDexStatus
+    : "all";
   $$('[data-action="motherdex-honor"]').forEach((button) => {
     const active = button.dataset.honor === honor;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $$('[data-action="motherdex-status"]').forEach((button) => {
+    const active = button.dataset.status === status;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   });
@@ -824,10 +834,14 @@ function renderMotherDex() {
     .filter((parent) => parent.sex === "female" && parent.size === honor)
     .map((parent) => creatureOf(parent)?.eggSpecies)
     .filter(Boolean));
-  const entries = motherDexEntries();
-  const ownedCount = entries.filter((entry) => ownedSpecies.has(entry.name)).length;
-  $("#motherDexCount").textContent = `已有 ${ownedCount} / ${entries.length}`;
-  $("#motherDexGrid").innerHTML = entries.map((entry) => {
+  const groupedEntries = motherDexEntries()
+    .filter((entry) => !state.filters.motherDexGroup || entry.groups.includes(state.filters.motherDexGroup));
+  const ownedCount = groupedEntries.filter((entry) => ownedSpecies.has(entry.name)).length;
+  const entries = groupedEntries.filter((entry) => status === "all"
+    || (status === "owned" && ownedSpecies.has(entry.name))
+    || (status === "missing" && !ownedSpecies.has(entry.name)));
+  $("#motherDexCount").textContent = `显示 ${entries.length} · 已有 ${ownedCount}/${groupedEntries.length}`;
+  $("#motherDexGrid").innerHTML = entries.length ? entries.map((entry) => {
     const owned = ownedSpecies.has(entry.name);
     return `<article class="motherdex-card ${owned ? "owned" : "missing"}" title="${esc(entry.name)} · ${owned ? "已有" : "缺少"}">
       <div class="motherdex-image">
@@ -836,8 +850,9 @@ function renderMotherDex() {
         <span class="motherdex-state">${owned ? "已有" : "缺少"}</span>
       </div>
       <strong>${esc(entry.name)}</strong>
+      <div class="tag-row motherdex-groups">${entry.groups.map((group) => `<span class="tag tone-tag" style="${toneStyle(group, "group")}">${esc(group)}</span>`).join("")}</div>
     </article>`;
-  }).join("");
+  }).join("") : emptyState("没有符合条件的母本", "请调整蛋组或拥有状态筛选");
   $$(".motherdex-image img").forEach((image) => {
     image.addEventListener("error", () => {
       const fallback = image.dataset.fallbackSrc;
@@ -863,8 +878,9 @@ function allLocalParents() {
 function motherDexEntries() {
   const speciesNames = [...new Set(state.creatures.map((creature) => clean(creature.eggSpecies)).filter(Boolean))];
   return speciesNames.map((name) => {
+    const variants = state.creatures.filter((creature) => creature.eggSpecies === name);
     const exact = state.creatures.find((creature) => creature.name === name);
-    const fallback = state.creatures.find((creature) => creature.eggSpecies === name);
+    const fallback = variants[0];
     const atlas = state.atlasByName.get(name);
     const imageCreature = exact || {
       name,
@@ -874,10 +890,11 @@ function motherDexEntries() {
     return {
       name,
       no: exact?.no || clean(atlas?.n) || fallback?.no || "",
+      groups: [...new Set(variants.flatMap((creature) => creature.groups))],
       imageUrl: creatureImageUrl(imageCreature),
       fallbackImageUrl: fallback ? creatureImageUrl(fallback) : ""
     };
-  }).sort((a, b) => a.no.localeCompare(b.no, "zh-CN", { numeric: true }) || a.name.localeCompare(b.name, "zh-CN"));
+  });
 }
 
 function renderCoverageLegacy() {
@@ -1040,6 +1057,10 @@ function handleAction(event) {
   }
   if (action === "motherdex-honor") {
     state.filters.motherDexHonor = button.dataset.honor;
+    renderMotherDex();
+  }
+  if (action === "motherdex-status") {
+    state.filters.motherDexStatus = button.dataset.status;
     renderMotherDex();
   }
 }
