@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>洛克育种档案</title>
+  <link rel="stylesheet" href="./styles.css?v=20260624-1">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-frame">
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true"><span>育</span></div>
+      <div class="brand-copy">
+        <p>ROCO BREEDING LEDGER</p>
+        <h1>洛克育种档案</h1>
+        <span>整理父母本、遗传覆盖与每一枚精灵蛋</span>
+      </div>
+      <div class="save-state">
+        <span class="status-dot"></span>
+        <strong>已保存到本机</strong>
+        <small id="saveTime">等待数据</small>
+      </div>
+      <div class="header-actions">
+        <button class="icon-button" id="exportBtn" type="button" title="导出全部数据" aria-label="导出全部数据">↓</button>
+        <label class="icon-button file-button" title="导入全部数据" aria-label="导入全部数据">
+          ↑
+          <input id="importFile" type="file" accept="application/json">
+        </label>
+      </div>
+    </header>
+
+    <nav class="module-tabs" aria-label="管理模块">
+      <button class="module-tab active" type="button" data-view="parents">
+        <span class="tab-icon">♙</span>
+        <span><strong>父母本名册</strong><small>育种仓库</small></span>
+      </button>
+      <button class="module-tab" type="button" data-view="eggs">
+        <span class="tab-icon">▣</span>
+        <span><strong>精灵蛋记录</strong><small>产蛋档案</small></span>
+      </button>
+      <div class="account-tools">
+        <div class="account-switcher">
+          <button class="account-pill" id="accountSwitchBtn" type="button" data-action="toggle-account-menu" aria-haspopup="menu" aria-expanded="false">
+            <span class="status-dot"></span>
+            <span id="currentAccountName">本机档案</span>
+            <span class="account-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="account-menu" id="accountMenu" role="menu" hidden>
+            <div class="account-menu-label">切换账号</div>
+            <div id="accountQuickList"></div>
+          </div>
+        </div>
+        <button class="account-manage-button" type="button" data-action="manage-accounts">账号管理</button>
+      </div>
+    </nav>
+
+    <main>
+      <section class="view active" id="parentsView">
+        <section class="surface parent-toolbar">
+          <div class="surface-head">
+            <div>
+              <h2>父母本名册</h2>
+              <p>按精灵、蛋组、性格与荣誉快速定位</p>
+            </div>
+            <span class="count-pill" id="parentCount">0 只</span>
+          </div>
+          <div class="filter-row">
+            <div class="search-control creature-combobox parent-search-combobox">
+              <span>⌕</span>
+              <input id="parentSearch" role="combobox" aria-label="搜索仓库精灵" aria-autocomplete="list" aria-expanded="false" autocomplete="off" placeholder="搜索精灵名称或编号">
+              <div class="creature-results" id="parentSearchResults" role="listbox" hidden></div>
+            </div>
+            <select id="parentGroupFilter"></select>
+            <select id="parentNatureFilter"></select>
+            <select id="parentHonorFilter"></select>
+          </div>
+        </section>
+
+        <div class="parent-warehouse-grid">
+          <section class="parent-bank mother-bank">
+            <div class="parent-bank-head">
+              <div><span class="bank-sex">♀</span><div><h2>母本名册</h2><small id="motherCount">0 只母本</small></div></div>
+              <button class="primary-button" type="button" data-action="add-parent" data-sex="female">＋ 登记母本</button>
+            </div>
+            <div class="parent-card-grid" id="motherParentList"></div>
+          </section>
+
+          <section class="parent-bank father-bank">
+            <div class="parent-bank-head">
+              <div><span class="bank-sex">♂</span><div><h2>父本名册</h2><small id="fatherCount">0 只父本</small></div></div>
+              <button class="primary-button" type="button" data-action="add-parent" data-sex="male">＋ 登记父本</button>
+            </div>
+            <div class="parent-card-grid" id="fatherParentList"></div>
+          </section>
+        </div>
+
+        <div class="parent-insights">
+          <section class="surface coverage-surface">
+            <div class="surface-head">
+              <div>
+                <h2>遗传覆盖一览</h2>
+                <p>按荣誉核对蛋组与泛用性格，双蛋组会同时计入</p>
+              </div>
+              <div class="coverage-honor-switch" role="group" aria-label="选择荣誉">
+                <button type="button" data-action="coverage-honor" data-honor="大块头婉转声">大块头婉转声</button>
+                <button type="button" data-action="coverage-honor" data-honor="大块头粗嗓门">大块头粗嗓门</button>
+                <button type="button" data-action="coverage-honor" data-honor="小不点婉转声">小不点婉转声</button>
+                <button type="button" data-action="coverage-honor" data-honor="小不点粗嗓门">小不点粗嗓门</button>
+              </div>
+            </div>
+            <div class="coverage-table-wrap">
+              <table class="coverage-table">
+                <thead id="coverageHead"></thead>
+                <tbody id="coverageBody"></tbody>
+              </table>
+            </div>
+            <div class="coverage-legend" aria-label="覆盖状态说明">
+              <span><i class="female-only"></i>只有种母</span>
+              <span><i class="male-only"></i>只有种公</span>
+              <span><i class="both-sexes"></i>公母均有</span>
+              <span><i class="no-stock"></i>暂无记录</span>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="eggsView">
+        <section class="surface">
+          <div class="surface-head">
+            <div class="title-lockup">
+              <span class="section-icon amber">▣</span>
+              <div>
+                <h2>精灵蛋记录</h2>
+                <p>登记荣誉、尺寸、双亲性格与产蛋时间</p>
+              </div>
+            </div>
+            <button class="primary-button" type="button" data-action="add-egg">＋ 记录一枚蛋</button>
+          </div>
+          <div class="filter-row">
+            <label class="search-control">
+              <span>⌕</span>
+              <input id="eggSearch" placeholder="搜索精灵蛋、双亲性格或属性">
+            </label>
+            <select id="eggGroupFilter"></select>
+            <select id="eggSizeFilter"></select>
+          </div>
+          <div class="egg-grid" id="eggGrid"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <datalist id="creatureList"></datalist>
+
+  <dialog class="modal" id="editorDialog">
+    <form method="dialog" class="modal-card" id="editorForm">
+      <div class="modal-head">
+        <div><p id="editorEyebrow">登记</p><h2 id="editorTitle">新增记录</h2></div>
+        <button class="icon-button" value="cancel" type="submit" formnovalidate aria-label="关闭">×</button>
+      </div>
+      <div id="editorFields" class="form-grid"></div>
+      <div class="modal-actions">
+        <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
+        <button class="primary-button" id="editorSave" value="default" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="detailDialog">
+    <div class="modal-card detail-card">
+      <div class="modal-head">
+        <div><p>精灵资料</p><h2 id="detailTitle">详情</h2></div>
+        <button class="icon-button" id="closeDetail" type="button" aria-label="关闭">×</button>
+      </div>
+      <div id="detailContent"></div>
+    </div>
+  </dialog>
+
+  <dialog class="modal account-dialog" id="accountDialog">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><p>本机账号</p><h2>账号管理</h2></div>
+        <button class="icon-button" id="closeAccountDialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <form class="account-create-form" id="accountCreateForm">
+        <label><span>昵称</span><input name="nickname" required maxlength="24" placeholder="例如：主号"></label>
+        <label><span>游戏 ID</span><input name="guid" required inputmode="numeric" pattern="[0-9]+" spellcheck="false" autocomplete="off" placeholder="输入纯数字 ID"></label>
+        <button class="primary-button" type="submit">新增账号</button>
+      </form>
+      <div class="account-manager-list" id="accountManagerList"></div>
+    </div>
+  </dialog>
+
+  <dialog class="modal export-dialog" id="exportDialog">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><p>本地备份</p><h2>备份已准备好</h2></div>
+        <button class="icon-button" id="closeExportDialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="export-dialog-body">
+        <p id="exportSummary"></p>
+        <small>备份包含账号资料、父母本和精灵蛋记录，可通过右上角导入按钮恢复。</small>
+      </div>
+      <div class="modal-actions">
+        <button class="secondary-button" id="cancelExportDialog" type="button">取消</button>
+        <a class="primary-button export-download-link" id="exportDownloadLink" href="#" download>下载 JSON</a>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
