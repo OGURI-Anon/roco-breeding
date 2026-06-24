@@ -133,7 +133,7 @@ function buildCreatures(csvText, atlas) {
     if (!byName.has(pet.nm)) byName.set(pet.nm, pet);
   });
 
-  return rows.map((row, index) => {
+  return rows.map((row) => {
     const no = clean(row["编号"]);
     const name = clean(row["精灵名"]);
     const eggSpecies = clean(row["蛋种(产蛋形态)"]);
@@ -149,7 +149,7 @@ function buildCreatures(csvText, atlas) {
     const maxWeight = num(row["精灵最大体重(kg)"]) ?? rangeValue(detail.w, 1);
 
     return {
-      key: `${no}-${name}-${index}`,
+      key: creatureStorageKey(no, name),
       no, name, eggSpecies, groups, primary, secondary, stage,
       form: clean(row["地区形态名称"]),
       minHeight, maxHeight, minWeight, maxWeight,
@@ -185,6 +185,7 @@ function parseCsv(text) {
 }
 
 function clean(value) { return String(value || "").trim(); }
+function creatureStorageKey(no, name) { return `${clean(no)}-${clean(name)}`; }
 function num(value) { const parsed = Number(value); return Number.isFinite(parsed) && clean(value) !== "" ? parsed : null; }
 function splitGroups(value) { return clean(value).split(/[、,，/]/).map(clean).filter(Boolean); }
 function rangeValue(value, index) {
@@ -281,12 +282,25 @@ function loadDb() {
 
 function sanitizeDb(db) {
   return {
-    parents: Array.isArray(db.parents) ? db.parents.filter((item) => state.byKey.has(item.creatureKey)).map(normalizeRecordHonor) : [],
-    eggs: Array.isArray(db.eggs) ? db.eggs.filter((item) => state.byKey.has(item.creatureKey)).map(normalizeEggRecord) : [],
+    parents: Array.isArray(db.parents) ? db.parents.map((item) => migrateCreatureRecord(item, normalizeRecordHonor)).filter(Boolean) : [],
+    eggs: Array.isArray(db.eggs) ? db.eggs.map((item) => migrateCreatureRecord(item, normalizeEggRecord)).filter(Boolean) : [],
     nests: Array.isArray(db.nests) ? db.nests.map(normalizeRecordHonor) : [],
     demands: Array.isArray(db.demands) ? db.demands.map(normalizeRecordHonor) : [],
     updatedAt: db.updatedAt || ""
   };
+}
+
+function resolveCreatureKey(value) {
+  const key = clean(value);
+  if (state.byKey.has(key)) return key;
+  const legacyKey = key.replace(/-\d+$/, "");
+  return state.byKey.has(legacyKey) ? legacyKey : "";
+}
+
+function migrateCreatureRecord(item, normalize) {
+  if (!item || typeof item !== "object") return null;
+  const creatureKey = resolveCreatureKey(item.creatureKey);
+  return creatureKey ? normalize({ ...item, creatureKey }) : null;
 }
 
 function normalizeRecordHonor(item) {
@@ -1335,7 +1349,7 @@ function exportDb() {
   }));
   const backup = {
     format: "roco-breeding-archive",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     accounts: state.accounts,
     currentId: state.currentAccountId,
@@ -1368,8 +1382,14 @@ function importDb(event) {
           .filter((account) => account.nickname && isValidAccountId(account.id) && (!account.guid || isValidGameId(account.guid)))
           .filter((account, index, list) => list.findIndex((item) => item.id === account.id || (account.guid && item.guid === account.guid)) === index);
         if (!accounts.length) throw new Error("备份中没有有效账号");
+        const preparedArchives = Object.fromEntries(accounts.map((account) => {
+          const source = imported.archives[account.id] || {};
+          const archive = sanitizeDb(source);
+          if (storedCreatureCount(source) !== storedCreatureCount(archive)) throw new Error("备份中存在无法识别的精灵记录");
+          return [account.id, archive];
+        }));
         accounts.forEach((account) => {
-          localStorage.setItem(accountDbKey(account.id), JSON.stringify(sanitizeDb(imported.archives[account.id] || {})));
+          localStorage.setItem(accountDbKey(account.id), JSON.stringify(preparedArchives[account.id]));
         });
         state.accounts = accounts;
         state.currentAccountId = accounts.some((account) => account.id === normalizeAccountId(imported.currentId))
@@ -1380,7 +1400,9 @@ function importDb(event) {
         renderAll();
         showToast(`已恢复 ${accounts.length} 个账号`);
       } else {
-        state.db = sanitizeDb(imported);
+        const archive = sanitizeDb(imported);
+        if (storedCreatureCount(imported) !== storedCreatureCount(archive)) throw new Error("备份中存在无法识别的精灵记录");
+        state.db = archive;
         saveDb();
         renderAll();
         showToast("旧版档案已导入当前账号");
@@ -1389,6 +1411,10 @@ function importDb(event) {
     event.target.value = "";
   };
   reader.readAsText(file);
+}
+
+function storedCreatureCount(db) {
+  return (Array.isArray(db?.parents) ? db.parents.length : 0) + (Array.isArray(db?.eggs) ? db.eggs.length : 0);
 }
 
 function parentBySex(sex) { return state.db.parents.filter((item) => item.sex === sex); }
