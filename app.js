@@ -679,7 +679,6 @@ function parentCard(parent) {
   const imageUrl = creatureImageUrl(creature);
   const weightPercent = rangePercent(parent.weight, creature?.minWeight, creature?.maxWeight);
   const fullStatus = parentFullStatus(parent, creature);
-  const natureOptions = [`<option value="">未设置性格</option>`, ...NATURES.map((item) => `<option value="${item.name}" ${selected(parent.nature, item.name)}>${item.name}</option>`)].join("");
   return `
     <article class="parent-card ${parent.sex === "female" ? "mother-card" : "father-card"}" data-parent-id="${parent.id}">
       <button class="icon-button compact danger parent-delete-button" type="button" data-action="delete-parent" data-id="${parent.id}" title="删除" aria-label="删除 ${esc(creature?.name || "父母本")}">×</button>
@@ -703,7 +702,7 @@ function parentCard(parent) {
             <select class="tone-select" style="${toneStyle(parent.size || "无", "honor")}" data-parent-field="size">${HONORS.map((item) => `<option value="${item}" ${selected(parent.size, item)}>${item}</option>`).join("")}</select>
           </label>
           <label class="parent-inline-field full"><span>性格</span>
-            <select class="tone-select" style="${toneStyle(parent.nature || "未设置性格", "nature")}" data-parent-field="nature">${natureOptions}</select>
+            ${natureSearchControl("nature", parent.nature, { inline: true, parentField: true })}
           </label>
           <label class="parent-inline-field"><span>身高（m）</span>
             <input data-parent-field="height" type="number" min="0" step="0.01" inputmode="decimal" value="${optionalNumber(parent.height)}" placeholder="选填">
@@ -738,6 +737,7 @@ function bindParentCardControls() {
   });
 
   $$(".parent-card [data-parent-field]").forEach((control) => {
+    if (control.dataset.parentField === "nature") return;
     let saveTimer;
     const commitValue = () => {
       clearTimeout(saveTimer);
@@ -807,6 +807,8 @@ function bindParentCardControls() {
       if (event.key === "Escape") closeResults();
     });
   });
+
+  bindNatureComboboxes(document);
 }
 
 function updateParentInline(id, values) {
@@ -848,26 +850,49 @@ function renderMotherDex() {
     .filter((parent) => parent.sex === "female" && parent.size === honor)
     .map((parent) => creatureOf(parent)?.eggSpecies)
     .filter(Boolean));
+  const ownedNatureMap = motherDexNatureMap(honor);
   const groupedEntries = motherDexEntries()
     .filter((entry) => !state.filters.motherDexGroup || entry.groups.includes(state.filters.motherDexGroup));
   const ownedCount = groupedEntries.filter((entry) => ownedSpecies.has(entry.name)).length;
   const entries = groupedEntries.filter((entry) => status === "all"
     || (status === "owned" && ownedSpecies.has(entry.name))
     || (status === "missing" && !ownedSpecies.has(entry.name)));
+  const isLargeHonor = honor.startsWith("大块头");
+  const extremeLabel = isLargeHonor ? "大块头极限" : "小不点极限";
   $("#motherDexCount").textContent = `显示 ${entries.length} · 已有 ${ownedCount}/${groupedEntries.length}`;
   $("#motherDexGrid").innerHTML = entries.length ? entries.map((entry) => {
     const owned = ownedSpecies.has(entry.name);
-    return `<article class="motherdex-card ${owned ? "owned" : "missing"}" title="${esc(entry.name)} · ${owned ? "已有" : "缺少"}">
-      <div class="motherdex-image">
-        <span class="avatar-fallback">${esc(entry.name.slice(0, 1))}</span>
-        ${entry.imageUrl ? `<img src="${esc(entry.imageUrl)}" data-fallback-src="${esc(entry.fallbackImageUrl)}" alt="${esc(entry.name)}" loading="lazy" decoding="async">` : ""}
-        <span class="motherdex-state">${owned ? "已有" : "缺少"}</span>
-      </div>
-      <strong>${esc(entry.name)}</strong>
-      <div class="tag-row motherdex-groups">${entry.groups.map((group) => `<span class="tag tone-tag" style="${toneStyle(group, "group")}">${esc(group)}</span>`).join("")}</div>
-    </article>`;
+    const ownedNatures = ownedNatureMap.get(entry.name) || [];
+    const eggHeight = isLargeHonor ? entry.eggMaxHeight : entry.eggMinHeight;
+    const eggWeight = isLargeHonor ? entry.eggMaxWeight : entry.eggMinWeight;
+    return `<button class="motherdex-card ${owned ? "owned" : "missing"}" type="button" data-action="flip-motherdex" aria-pressed="false" aria-label="${esc(entry.name)}，${owned ? "已有" : "缺少"}，查看${extremeLabel}" title="${esc(entry.name)} · ${owned ? "已有" : "缺少"}">
+      <span class="motherdex-card-inner">
+        <span class="motherdex-card-face motherdex-card-front" aria-hidden="false">
+          <span class="motherdex-image">
+            <span class="avatar-fallback">${esc(entry.name.slice(0, 1))}</span>
+            ${entry.imageUrl ? `<img src="${esc(entry.imageUrl)}" data-fallback-src="${esc(entry.fallbackImageUrl)}" alt="${esc(entry.name)}" loading="lazy" decoding="async">` : ""}
+            <span class="motherdex-state">${owned ? "已有" : "缺少"}</span>
+          </span>
+          <strong>${esc(entry.name)}</strong>
+          ${ownedNatures.length ? `<span class="tag-row motherdex-natures">${ownedNatures.map((nature) => `<span class="motherdex-nature-tag" style="${toneStyle(nature, "nature")}">${esc(nature)}</span>`).join("")}</span>` : ""}
+          <span class="tag-row motherdex-groups">${entry.groups.map((group) => `<span class="tag tone-tag" style="${toneStyle(group, "group")}">${esc(group)}</span>`).join("")}</span>
+        </span>
+        <span class="motherdex-card-face motherdex-card-back" aria-hidden="true">
+          <span class="motherdex-egg-image">
+            <span class="avatar-fallback">蛋</span>
+            ${entry.eggImageUrl ? `<img src="${esc(entry.eggImageUrl)}" data-fallback-src="${esc(entry.eggFallbackImageUrl)}" alt="${esc(entry.name)}的蛋" loading="lazy" decoding="async">` : ""}
+          </span>
+          <strong>${esc(entry.name)}的蛋</strong>
+          <span class="motherdex-extreme-label">${extremeLabel}</span>
+          <span class="motherdex-extreme-values">
+            <span><small>极限蛋高</small><strong>${eggHeight == null ? "暂无" : `${eggHeight} m`}</strong></span>
+            <span><small>极限蛋重</small><strong>${eggWeight == null ? "暂无" : `${eggWeight} kg`}</strong></span>
+          </span>
+        </span>
+      </span>
+    </button>`;
   }).join("") : emptyState("没有符合条件的母本", "请调整蛋组或拥有状态筛选");
-  $$(".motherdex-image img").forEach((image) => {
+  $$(".motherdex-card img").forEach((image) => {
     image.addEventListener("error", () => {
       const fallback = image.dataset.fallbackSrc;
       if (fallback && image.src !== fallback) {
@@ -876,6 +901,23 @@ function renderMotherDex() {
       } else image.hidden = true;
     });
   });
+}
+
+function motherDexNatureMap(honor) {
+  const allowed = new Set(COVERAGE_NATURES);
+  const result = new Map();
+  allLocalParents()
+    .filter((parent) => parent.sex === "female" && parent.size === honor && allowed.has(parent.nature))
+    .forEach((parent) => {
+      const species = creatureOf(parent)?.eggSpecies;
+      if (!species) return;
+      if (!result.has(species)) result.set(species, new Set());
+      result.get(species).add(parent.nature);
+    });
+  return new Map([...result.entries()].map(([species, natures]) => [
+    species,
+    COVERAGE_NATURES.filter((nature) => natures.has(nature))
+  ]));
 }
 
 function allLocalParents() {
@@ -901,12 +943,23 @@ function motherDexEntries() {
       no: clean(atlas?.n) || fallback?.no || "",
       atlas: atlas || fallback?.atlas || {}
     };
+    const eggCreature = exact || fallback || imageCreature;
+    const eggData = variants.find((creature) => creature.eggMinHeight != null
+      || creature.eggMaxHeight != null
+      || creature.eggMinWeight != null
+      || creature.eggMaxWeight != null) || fallback;
     return {
       name,
       no: exact?.no || clean(atlas?.n) || fallback?.no || "",
       groups: [...new Set(variants.flatMap((creature) => creature.groups))],
       imageUrl: creatureImageUrl(imageCreature),
-      fallbackImageUrl: fallback ? creatureImageUrl(fallback) : ""
+      fallbackImageUrl: fallback ? creatureImageUrl(fallback) : "",
+      eggImageUrl: eggImageUrl(eggCreature),
+      eggFallbackImageUrl: creatureImageUrl(eggCreature),
+      eggMinHeight: eggData?.eggMinHeight ?? null,
+      eggMaxHeight: eggData?.eggMaxHeight ?? null,
+      eggMinWeight: eggData?.eggMinWeight ?? null,
+      eggMaxWeight: eggData?.eggMaxWeight ?? null
     };
   });
 }
@@ -1077,6 +1130,14 @@ function handleAction(event) {
     state.filters.motherDexStatus = button.dataset.status;
     renderMotherDex();
   }
+  if (action === "flip-motherdex") toggleMotherDexCard(button);
+}
+
+function toggleMotherDexCard(card) {
+  const flipped = card.classList.toggle("flipped");
+  card.setAttribute("aria-pressed", String(flipped));
+  card.querySelector(".motherdex-card-front")?.setAttribute("aria-hidden", String(flipped));
+  card.querySelector(".motherdex-card-back")?.setAttribute("aria-hidden", String(!flipped));
 }
 
 function openParentEditor(id, presetSex) {
@@ -1085,9 +1146,8 @@ function openParentEditor(id, presetSex) {
   setEditor("父母本", record ? "编辑父母本" : "登记父母本", `
     ${field("精灵", creatureSearchControl(creatureOf(record)), true, true)}
     ${field("性别", `<select name="sex" required><option value="male" ${selected(record?.sex || presetSex || "male", "male")}>种公</option><option value="female" ${selected(record?.sex || presetSex, "female")}>种母</option></select>`, false, true)}
-    ${field("别名", `<input name="nickname" value="${esc(record?.nickname || "")}" placeholder="仓库中的辨识名称">`)}
-    ${field("性格", natureControl(record?.nature))}
     ${field("荣誉", `<select name="size" required>${HONORS.map((item) => `<option value="${item}" ${selected(record?.size, item)}>${item}</option>`).join("")}</select>`, false, true)}
+    ${field("性格", natureControl(record?.nature), true)}
     ${field("身高（m）", measurementControl("height", record?.height, creatureOf(record)))}
     ${field("体重（kg）", measurementControl("weight", record?.weight, creatureOf(record)))}
   `);
@@ -1185,11 +1245,127 @@ function bindEditorControls() {
     });
   });
 
-  $$("#editorFields .nature-control select").forEach((select) => {
-    select.addEventListener("change", () => {
-      select.closest(".nature-control").querySelector(".nature-effect").textContent = select.value ? natureEffect(select.value) : "选择后显示属性变化";
+  bindNatureComboboxes($("#editorFields"));
+}
+
+function bindNatureComboboxes(root = document) {
+  root.querySelectorAll(".nature-combobox").forEach((combobox) => {
+    if (combobox.dataset.natureBound === "true") return;
+    combobox.dataset.natureBound = "true";
+    const input = combobox.querySelector(".nature-search-input");
+    const results = combobox.querySelector(".nature-results");
+    const effect = combobox.querySelector(".nature-effect");
+    if (!input || !results) return;
+
+    let matches = [];
+    let activeIndex = -1;
+    let saveTimer;
+    input.dataset.natureValue = input.value;
+
+    const card = input.closest(".parent-card");
+    const updateTone = () => {
+      input.setAttribute("style", toneStyle(input.value || "未设置性格", "nature"));
+      if (effect) effect.textContent = input.value ? natureEffect(input.value) : "选择后显示属性变化";
+    };
+    const closeResults = () => {
+      results.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      activeIndex = -1;
+    };
+    const commitParentNature = (value) => {
+      if (!card || input.dataset.parentField !== "nature") return;
+      const normalized = normalizeNatureValue(value);
+      if (normalized === null) return;
+      updateParentInline(card.dataset.parentId, { nature: normalized });
+    };
+    const chooseNature = (nature) => {
+      input.value = nature.name;
+      input.dataset.natureValue = nature.name;
+      updateTone();
+      closeResults();
+      commitParentNature(nature.name);
+    };
+    const setActive = (nextIndex) => {
+      if (!matches.length) return;
+      activeIndex = (nextIndex + matches.length) % matches.length;
+      results.querySelectorAll(".nature-option").forEach((button, index) => button.classList.toggle("active", index === activeIndex));
+    };
+    const renderResults = () => {
+      matches = searchNatures(input.value).slice(0, 8);
+      activeIndex = -1;
+      results.innerHTML = matches.length ? matches.map((nature, index) => `
+        <button class="nature-option" type="button" role="option" data-index="${index}" style="${toneStyle(nature.name, "nature")}">
+          <strong>${esc(nature.name)}</strong>
+          <span>${esc(nature.increase)}▲ · ${esc(nature.decrease)}▼</span>
+        </button>`).join("") : `<div class="creature-no-result">没有匹配性格</div>`;
+      results.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      results.querySelectorAll(".nature-option").forEach((button) => {
+        button.addEventListener("pointerdown", (event) => event.preventDefault());
+        button.addEventListener("click", () => chooseNature(matches[Number(button.dataset.index)]));
+      });
+    };
+
+    input.addEventListener("focus", renderResults);
+    input.addEventListener("input", () => {
+      updateTone();
+      renderResults();
+      if (input.dataset.parentField === "nature") {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => commitParentNature(input.value), 500);
+      }
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(closeResults, 100);
+      const normalized = normalizeNatureValue(input.value);
+      if (normalized === null) {
+        input.value = input.dataset.natureValue || "";
+        updateTone();
+      } else {
+        input.value = normalized;
+        input.dataset.natureValue = normalized;
+        updateTone();
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") { event.preventDefault(); if (results.hidden) renderResults(); setActive(activeIndex + 1); }
+      if (event.key === "ArrowUp") { event.preventDefault(); if (results.hidden) renderResults(); setActive(activeIndex - 1); }
+      if (event.key === "Enter" && !results.hidden && matches.length) {
+        event.preventDefault();
+        chooseNature(matches[activeIndex >= 0 ? activeIndex : 0]);
+      }
+      if (event.key === "Escape") closeResults();
     });
   });
+}
+
+function searchNatures(query) {
+  const terms = clean(query).toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return NATURES;
+  return NATURES
+    .map((nature) => ({ nature, score: natureSearchScore(nature, terms) }))
+    .filter((item) => Number.isFinite(item.score))
+    .sort((a, b) => a.score - b.score || a.nature.name.localeCompare(b.nature.name, "zh-CN"))
+    .map((item) => item.nature);
+}
+
+function natureSearchScore(nature, terms) {
+  const name = nature.name.toLowerCase();
+  const increase = nature.increase.toLowerCase();
+  const decrease = nature.decrease.toLowerCase();
+  const text = `${name} ${increase} ${decrease} ${natureEffect(nature.name).toLowerCase()}`;
+  let total = 0;
+  for (const term of terms) {
+    if (name === term) total += 0;
+    else if (name.startsWith(term)) total += 1;
+    else if (name.includes(term)) total += 2;
+    else if (increase.includes(term)) total += 3;
+    else if (decrease.includes(term)) total += 4;
+    else if (text.includes(term)) total += 5;
+    else if (isSubsequence(term, text)) total += 8;
+    else return Infinity;
+  }
+  return total;
 }
 
 function searchCreatures(query) {
@@ -1240,9 +1416,11 @@ function submitEditor(event) {
   if (editor.type === "parent") {
     const creature = selectedCreature(data);
     if (!creature) return showToast("请从搜索结果中选择精灵");
+    const nature = normalizeNatureValue(data.nature);
+    if (nature === null) return showToast("请从性格搜索结果中选择性格");
     upsert("parents", editor.id, {
-      creatureKey: creature.key, sex: data.sex, nickname: clean(data.nickname),
-      nature: clean(data.nature), size: data.size,
+      creatureKey: creature.key, sex: data.sex,
+      nature, size: data.size,
       height: optionalValue(data.height), weight: optionalValue(data.weight)
     });
   }
@@ -1260,10 +1438,13 @@ function submitEditor(event) {
   if (editor.type === "egg") {
     const creature = selectedCreature(data);
     if (!creature) return showToast("请从搜索结果中选择精灵");
+    const motherNature = normalizeNatureValue(data.motherNature);
+    const fatherNature = normalizeNatureValue(data.fatherNature);
+    if (motherNature === null || fatherNature === null) return showToast("请从性格搜索结果中选择性格");
     upsert("eggs", editor.id, {
       creatureKey: creature.key, size: data.size,
       eggHeight: optionalValue(data.eggHeight), eggWeight: optionalValue(data.eggWeight),
-      motherNature: clean(data.motherNature), fatherNature: clean(data.fatherNature),
+      motherNature, fatherNature,
       laidAt: clean(data.laidAt)
     });
   }
@@ -1420,7 +1601,7 @@ function storedCreatureCount(db) {
 function parentBySex(sex) { return state.db.parents.filter((item) => item.sex === sex); }
 function parentById(id) { return state.db.parents.find((item) => item.id === id); }
 function creatureOf(record) { return record ? state.byKey.get(record.creatureKey) : null; }
-function parentLabel(parent) { return parent ? parent.nickname || creatureOf(parent)?.name || "未知" : "未选择"; }
+function parentLabel(parent) { return parent ? creatureOf(parent)?.name || "未知" : "未选择"; }
 function creatureInputValue(creature) { return creature ? `${creature.no} ${creature.name}` : ""; }
 function creatureImageUrl(creature) {
   const fallbackPath = creature?.no && creature?.name ? `a/i/${creature.no}_${creature.name}.png` : "";
@@ -1528,18 +1709,31 @@ function toneStyle(value, type) {
   return `--tone-h:${(offset + index * step) % 360};--tone-s:${type === "group" ? 64 : 58}%`;
 }
 function natureMeta(name) { return NATURES.find((item) => item.name === name); }
+function normalizeNatureValue(value) {
+  const text = clean(value);
+  if (!text || text === "未设置性格" || text === "未设置") return "";
+  return natureMeta(text) ? text : null;
+}
 function natureEffect(name) {
   const nature = natureMeta(name);
   if (!nature) return "性格 / 配置";
   return `${nature.increase}▲ · ${nature.decrease}▼`;
 }
 function natureControl(value = "") {
-  const options = [`<option value="">未设置性格</option>`, ...NATURES.map((item) => `<option value="${item.name}" ${selected(value, item.name)}>${item.name} · ${item.increase}▲ / ${item.decrease}▼</option>`)];
-  return `<div class="nature-control"><select name="nature">${options.join("")}</select><small class="nature-effect">${esc(value ? natureEffect(value) : "选择后显示属性变化")}</small></div>`;
+  return natureSearchControl("nature", value);
 }
 function namedNatureControl(name, value = "") {
-  const options = [`<option value="">未设置性格</option>`, ...NATURES.map((item) => `<option value="${item.name}" ${selected(value, item.name)}>${item.name} · ${item.increase}▲ / ${item.decrease}▼</option>`)];
-  return `<select name="${name}">${options.join("")}</select>`;
+  return natureSearchControl(name, value);
+}
+function natureSearchControl(name, value = "", options = {}) {
+  const current = clean(value);
+  const placeholder = options.inline ? "输入/选择性格" : "输入性格、加成或削弱属性";
+  const parentField = options.parentField ? ' data-parent-field="nature"' : "";
+  return `<div class="nature-control nature-combobox${options.inline ? " inline-nature-combobox" : ""}">
+    <input class="nature-search-input tone-input" style="${toneStyle(current || "未设置性格", "nature")}" name="${esc(name)}" value="${esc(current)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="${placeholder}"${parentField}>
+    <div class="nature-results" role="listbox" hidden></div>
+    <small class="nature-effect">${esc(current ? natureEffect(current) : "选择后显示属性变化")}</small>
+  </div>`;
 }
 function dateTimeInputValue(value) {
   if (!value) return "";
